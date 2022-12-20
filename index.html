@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>Бабло</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/jpeg" href="http://stats.m3x.org/icon.png">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+	<script src="ajax.js"></script>
+</head>
+
+<body>
+	<nav class="navbar navbar-expand-md bg-dark navbar-dark">
+		<a class="navbar-brand" href="">
+			<img src="http://stats.m3x.org/images/logo_Resize_M3x.png" alt="Logo" style="width:90px;">
+		</a>
+		<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#collapsibleNavbar">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+		<div class="collapse navbar-collapse" id="collapsibleNavbar">
+			<ul class="navbar-nav mr-auto">
+				<li class="nav-item">
+					<a class="nav-link" href="/">Главная</a>
+				</li>
+				<li>
+					<a class="nav-link" href="settings.html">Настройки оплаты</a>
+				</li>
+			</ul>
+			<ul class="navbar-nav">
+			<form class="form-inline" id="otdel_list">
+				<input type="hidden" name="nastr" value="zarplata">
+				<li class="nav-item nav-link">
+				<div class="form-group">
+					<select class="form-control" name="city">
+						<option value="Алчевск">Алчевск</option>
+						<option value="Стаханов">Стаханов</option>
+						<option value="Петровское">Петровское</option>
+					</select>
+				</div>
+				</li>
+				<li class="nav-item">
+					<input type="date" name="from" id="dateFrom" class="form-control mr-sm-2 bg-dark text-white">
+				</li>
+				<li class="nav-item">
+					<input type="date" name="to" id="dateTo" class="form-control mr-sm-2 bg-dark text-white">
+				</li>
+				<li class="nav-item">
+					<input type="button" id="btn" class="btn btn-primary mr-sm-2" value="Рассчитать" />
+					<input type=submit form=download id=btnDownload class='btn btn-warning' value=Загрузить />
+				</li>
+			</form>
+			</ul>
+		</div>  
+
+	</nav>
+
+	<div class="container-fluid pt-4">
+		<div id="result_form">
+			<div>
+
+			</div>
+		</div>
+	</div>
+
+</body>
+</html>

@@ -1,6 +1,12 @@
 {
+    "autoload": {
+        "psr-4": {
+            "App\\": "ktu/"
+        }
+    }
+	
     "require": {
-        "phpoffice/phpspreadsheet": "^1.25.0",
-        "alhimik1986/php-excel-templator": "^1.0.13"
+        "phpoffice/phpspreadsheet": "^1.17",
+        "alhimik1986/php-excel-templator": "^1.0"
     }
 }

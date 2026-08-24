@@ -66,11 +66,12 @@ try {
 					stavka      = :stavka,
                     stavka_chas = :stavka_chas,
                     nadbavka    = :nadbavka,
-                    dop_premia  = :dop_premia,
-                    otpusknye   = :otpusknye,
+                    premia      = :premia,
                     bolnichnye  = :bolnichnye,
+                    otpusknye   = :otpusknye,
                     uderjanie   = :uderjanie,
-                    avans       = :avans
+                    avans       = :avans,
+                    dolg        = :dolg
                 WHERE id = :id
             ');
 
@@ -87,16 +88,19 @@ try {
                     continue; // пропускаем мусорные ключи
                 }
 
-                $stmt->bindValue(':id',          $id,                          SQLITE3_INTEGER);
-				$stmt->bindValue(':oklad',       (int)($info['oklad']       ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':stavka',      (int)($info['stavka']      ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':stavka_chas', (int)($info['stavka_chas'] ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':nadbavka',    (int)($info['nadbavka']    ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':dop_premia',  (int)($info['dop_premia']  ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':otpusknye',   (int)($info['otpusknye']   ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':bolnichnye',  (int)($info['bolnichnye']  ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':uderjanie',   (int)($info['uderjanie']   ?? 0), SQLITE3_INTEGER);
-                $stmt->bindValue(':avans',       (int)($info['avans']       ?? 0), SQLITE3_INTEGER);
+                $stmt->bindValue(':id',          $id,                                    SQLITE3_INTEGER);
+                $stmt->bindValue(':oklad',       (float)($info['oklad']       ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':stavka',      (float)($info['stavka']      ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':stavka_chas', (float)($info['stavka_chas'] ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':nadbavka',    (float)($info['nadbavka']    ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':premia',      (float)($info['premia']      ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':bolnichnye',  (float)($info['bolnichnye']  ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':otpusknye',   (float)($info['otpusknye']   ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':uderjanie',   (float)($info['uderjanie']   ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':avans',       (float)($info['avans']       ?? 0),     SQLITE3_FLOAT);
+                $stmt->bindValue(':dolg',        (float)($info['dolg']        ?? 0),     SQLITE3_FLOAT);
+
+
 
                 $stmt->execute();
                 $stmt->reset();   // ← сбрасываем для повторного использования
@@ -167,11 +171,14 @@ try {
             $stmt->close();
             break;
 
-        // ── Обновление ТОЛЬКО аванса (безопасно, не трогает другие поля) + перезапись JSON ──
-        case 'avans':
+        // ── Обновление ТОЛЬКО полей заполняемых бухгалтерией (безопасно, не трогает другие поля) + перезапись JSON ──
+        case 'archive':
             $stmt = $db->prepare('
-                UPDATE employees SET 
-                avans = :avans 
+                UPDATE employees SET
+                premia = :premia,
+                bolnichnye = :bolnichnye,
+                otpusknye = :otpusknye,
+                avans = :avans
                 WHERE id = :id
             ');
             if ($stmt === false) {
@@ -183,28 +190,41 @@ try {
             $archive_date = $_POST['archive_date']  ?? '';  // Дата из имени файла (YYYY-MM-DD)
             unset($_POST['city'], $_POST['archive_date']); // чтобы не мешали в цикле
 
-            $jsonUpdates = []; // массив id => новый аванс
+            $jsonUpdates = []; // массив id => ['premia' => ..., 'bolnichnye' => ..., 'otpusknye' => ..., 'avans' => ...]
             
             $db->exec('BEGIN TRANSACTION');
             $updated = 0;
             
             foreach ($_POST as $id => $info) {
                 $id = (int) $id;
-                // Проверяем, что это корректный ID и передан именно аванс
-                if ($id <= 0 || !is_array($info) || !isset($info['avans'])) {
-                    continue; 
+                // Проверяем, что это корректный ID
+                if ($id <= 0 || !is_array($info)) {
+                    continue;
                 }
+
+                $premia     = isset($info['premia'])     ? (float)$info['premia']     : 0;
+                $bolnichnye = isset($info['bolnichnye']) ? (float)$info['bolnichnye'] : 0;
+                $otpusknye  = isset($info['otpusknye'])  ? (float)$info['otpusknye']  : 0;
+                $avans      = isset($info['avans'])      ? (float)$info['avans']      : 0;
+
                 
                 $stmt->bindValue(':id',    $id,             SQLITE3_INTEGER);
-                // В базе данных avans имеет тип REAL, поэтому используем float
-                $stmt->bindValue(':avans', (float)$info['avans'], SQLITE3_FLOAT); 
-                
+                // В базе данных денежные поля имеют тип REAL, поэтому используем float
+                $stmt->bindValue(':premia',     $premia,     SQLITE3_FLOAT);
+                $stmt->bindValue(':bolnichnye', $bolnichnye, SQLITE3_FLOAT);
+                $stmt->bindValue(':otpusknye',  $otpusknye,  SQLITE3_FLOAT);
+                $stmt->bindValue(':avans',      $avans,      SQLITE3_FLOAT);
                 $stmt->execute();
                 $stmt->reset();
                 $updated++;
-
-                // ВАЖНО: заполняем массив для обновления JSON
-                $jsonUpdates[$id] = (float)$info['avans'];
+                
+                // Заполняем массив для обновления JSON
+                $jsonUpdates[$id] = [
+                    'premia'     => $premia,
+                    'bolnichnye' => $bolnichnye,
+                    'otpusknye'  => $otpusknye,
+                    'avans'      => $avans
+                ];
             }
             
             $db->exec('COMMIT');
@@ -232,20 +252,54 @@ try {
                             $changed = false;
                             foreach ($data[$empKey] as $divName => $divStaff) {
                                 foreach ($divStaff as $fio => $empData) {
-                                    $idKey    = array_key_exists('id ', $empData) ? 'id ' : 'id';
-                                    $avansKey = array_key_exists('Аванс ', $empData) ? 'Аванс ' : 'Аванс';
-                                    $itogoKey = array_key_exists('Итого ', $empData) ? 'Итого ' : 'Итого';
-                                    $nrKey    = array_key_exists('На руки ', $empData) ? 'На руки ' : 'На руки';
+                                    // Подстраховка от пробелов в концах ключей JSON
+                                    $idKey         = array_key_exists('id ', $empData)        ? 'id '        : 'id';
+                                    // ✅ Поддержка как нового 'Премия', так и старого 'Доп.премия' (с пробелом и без)
+                                    $premiaKey = 'Премия'; // значение по умолчанию
+                                    if (array_key_exists('Премия ', $empData)) {
+                                        $premiaKey = 'Премия ';
+                                    } elseif (array_key_exists('Премия', $empData)) {
+                                        $premiaKey = 'Премия';
+                                    } elseif (array_key_exists('Доп.премия ', $empData)) {
+                                        $premiaKey = 'Доп.премия ';
+                                    } elseif (array_key_exists('Доп.премия', $empData)) {
+                                        $premiaKey = 'Доп.премия';
+                                    }
+                                    $bolnichnyeKey = array_key_exists('Больничные ', $empData)? 'Больничные ': 'Больничные';
+                                    $otpusknyeKey  = array_key_exists('Отпускные ', $empData) ? 'Отпускные ' : 'Отпускные';
+                                    $avansKey      = array_key_exists('Аванс ', $empData)     ? 'Аванс '     : 'Аванс';
+                                    $itogoKey      = array_key_exists('Итого ЗП ', $empData)  ? 'Итого ЗП '  : 'Итого ЗП';
+                                    $nrKey         = array_key_exists('На руки ', $empData)   ? 'На руки '   : 'На руки';
+                                    $vsegoKey      = array_key_exists('Всего за мес. ', $empData) ? 'Всего за мес. ' : 'Всего за мес.';
                                     
                                     $empId = isset($empData[$idKey]) ? (int)$empData[$idKey] : 0;
                                     
                                     if (isset($jsonUpdates[$empId])) {
-                                        $newAvans = $jsonUpdates[$empId];
-                                        $data[$empKey][$divName][$fio][$avansKey] = $newAvans;
+                                        $update = $jsonUpdates[$empId];
+
+                                        // Обновляем введённые значения в JSON
+                                        $data[$empKey][$divName][$fio][$premiaKey]     = $update['premia'];
+                                        $data[$empKey][$divName][$fio][$bolnichnyeKey] = $update['bolnichnye'];
+                                        $data[$empKey][$divName][$fio][$otpusknyeKey]  = $update['otpusknye'];
+                                        $data[$empKey][$divName][$fio][$avansKey]      = $update['avans'];
                                         
-                                        // Пересчёт: На руки = Итого - Аванс
-                                        $itogo = isset($empData[$itogoKey]) ? (float)$empData[$itogoKey] : 0;
-                                        $data[$empKey][$divName][$fio][$nrKey] = $itogo - $newAvans;
+                                        // Пересчёт: Итого ЗП =
+                                        $stavka      = isset($empData['Ставка'])             ? (float)$empData['Ставка']             : 0;
+                                        $zp_chasy    = isset($empData['ЗП Часы'])            ? (float)$empData['ЗП Часы']            : 0;
+                                        $zp_ktu      = isset($empData['ЗП КТУ'])             ? (float)$empData['ЗП КТУ']             : 0;
+                                        $stroitelnye = isset($empData['Строительные работы'])? (float)$empData['Строительные работы']: 0;
+                                        $nadbavki    = isset($empData['Надбавки'])           ? (float)$empData['Надбавки']           : 0;
+                                        $uderjanie   = isset($empData['Удержания'])          ? (float)$empData['Удержания']          : 0;
+                                        $itogo = $stavka + $zp_chasy + $zp_ktu + $stroitelnye + $nadbavki + $update['premia'] - $uderjanie;
+                                        
+                                        // Пересчёт: На руки = Итого ЗП - Аванс
+                                        $na_ruki = $itogo - $update['avans'];
+                                        $data[$empKey][$divName][$fio][$nrKey] = $na_ruki;
+
+                                        // 3. Всего за мес.
+                                        $vsego = $na_ruki + $update['bolnichnye'] + $update['otpusknye'];
+                                        $data[$empKey][$divName][$fio][$vsegoKey] = $vsego;
+                                        
                                         
                                         $changed = true;
                                     }

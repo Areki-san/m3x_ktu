@@ -129,14 +129,14 @@
 
     $arr_date = getArchiveDatesByCity((string)$selectedCity);
 
-    if (!isset($is_editable_avans)) {
-        $is_editable_avans = (date('d') <= edit_delta); 
+    if (!isset($is_editable_archive)) {
+        $is_editable_archive = (date('d') <= edit_delta); 
     }
 
     $smarty->assign('arr_city', arr_city);
     $smarty->assign('arr_date', $arr_date);
     $smarty->assign('selected_city', $selectedCity);
     // ПЕРЕДАЁМ ФЛАГ В ШАБЛОН
-    $smarty->assign('is_editable_avans', $is_editable_avans);
+    $smarty->assign('is_editable_archive', $is_editable_archive);
 
     $smarty->display('archive.tpl'); //публикуем шаблон

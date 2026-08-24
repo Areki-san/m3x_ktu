@@ -2,9 +2,9 @@
 
 // функция вывода расчёта зарплаты
 function html(){
-	GLOBAL $smarty, $is_editable_avans, $employees, $headers, $classifier, $podr, $dateFrom, $dateTo, $archiveDate;
+	GLOBAL $smarty, $is_editable_archive, $employees, $headers, $classifier, $podr, $dateFrom, $dateTo, $archiveDate;
 	$stop = array("Оклад");
-	//$stop = array("Аванс","Удержания","Штраф","Доп.премия","На руки");
+	//$stop = array("Аванс","Удержания","Штраф","Премия","На руки");
 
 	// сбор подробной информации о заявках
 	foreach ($employees as $division_name => $division_staff) {
@@ -29,7 +29,7 @@ function html(){
 	$smarty -> assign('classifier', $classifier);
 	$smarty -> assign('podr', $podr);
     // ПЕРЕДАЁМ ФЛАГ В ШАБЛОН
-    $smarty->assign('is_editable_avans', $is_editable_avans);
+    $smarty->assign('is_editable_archive', $is_editable_archive);
 
 	if(!empty($modal)){
 		$smarty -> assign('modal', $modal);

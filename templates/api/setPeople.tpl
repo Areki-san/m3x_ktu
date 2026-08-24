@@ -32,11 +32,12 @@
 				<th class='align-middle'>Ставка час</th>
 				<th class='align-middle'>Ставка</th>
 				<th class='align-middle'>Надбавка</th>
-				<th class='align-middle'>Аванс</th>
-				<th class='align-middle'>Доп.премия</th>
-				<th class='align-middle'>Отпускные</th>
-				<th class='align-middle'>Больничные</th>
+				<th class='align-middle'>Премия</th>
 				<th class='align-middle'>Удержания/Штрафы</th>
+				<th class='align-middle'>Аванс</th>
+				<th class='align-middle'>Больничные</th>
+				<th class='align-middle'>Отпускные</th>
+				<th class='align-middle'>Долг</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -48,11 +49,12 @@
 			<td><input type=number class='form-control text-center' name='{$row.id}[stavka_chas]' value={$row.stavka_chas}></td>
 			<td><input type=number class='form-control text-center' name='{$row.id}[stavka]' value={$row.stavka}></td>
 			<td><input type=number class='form-control text-center' name='{$row.id}[nadbavka]' value={$row.nadbavka}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[avans]' value={$row.avans}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[dop_premia]' value={$row.dop_premia}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[otpusknye]' value={$row.otpusknye}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[bolnichnye]' value={$row.bolnichnye}></td>
+			<td><input type=number class='form-control text-center' name='{$row.id}[premia]' value={$row.premia}></td>
 			<td><input type=number class='form-control text-center' name='{$row.id}[uderjanie]' value={$row.uderjanie}></td>
+			<td><input type=number class='form-control text-center' name='{$row.id}[avans]' value={$row.avans}></td>
+			<td><input type=number class='form-control text-center' name='{$row.id}[bolnichnye]' value={$row.bolnichnye}></td>
+			<td><input type=number class='form-control text-center' name='{$row.id}[otpusknye]' value={$row.otpusknye}></td>
+			<td><input type=number class='form-control text-center' name='{$row.id}[dolg]' value={$row.dolg}></td>
 		</tr>
 {/foreach}
 

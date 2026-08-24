@@ -27,68 +27,97 @@ if (empty($_POST['to'])){
 	$dateTo = $_POST['to']." 23:59:00";
 }
 
-function getSettings(){
-	GLOBAL $employees, $podr;
+/**
+ * Единая функция загрузки настроек и списка сотрудников из БД.
+ * Исключает дублирование запросов и инициализации массивов.
+ */
+function loadSettingsAndEmployees(): void
+{
+    GLOBAL $employees, $podr;
+    
+    $db = getDB(); // Используем переиспользуемое подключение (см. пункт 3)
 
-	$dblite = new SQLite3(SQL_DB);
-    $dblite->busyTimeout(5000);
-    $dblite->exec('PRAGMA journal_mode=WAL');
+    // 1. Загрузка справочников (КТУ, Часы, Фонды)
+    $res = $db->query('SELECT * FROM ktu');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $GLOBALS['classifier'][$row['type_of_work']] = (float)$row['work_ktu'];
+    }
 
-	$res = $dblite->query('SELECT * FROM ktu');
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)){
-		$GLOBALS['classifier'][$row['type_of_work']] = $row['work_ktu'];
-	}
+    $res = $db->query('SELECT * FROM chasy');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $GLOBALS['chasy'][$row['tip']] = (float)$row['stavka'];
+    }
 
-	$res = $dblite->query('SELECT * FROM chasy');
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-		$GLOBALS['chasy'][$row['tip']] = $row['stavka'];
-	}
+    $res = $db->query('SELECT * FROM fond_ktu');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $GLOBALS['fond_ktu'][$row['otdel']] = (float)$row['ktu'];
+    }
 
-	$res = $dblite->query('SELECT * FROM fond_ktu');
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-		$GLOBALS['fond_ktu'][$row['otdel']] = $row['ktu'];
-	}
+    // 2. Загрузка заголовков и списка отделов
+    $res = $db->query('SELECT * FROM table_headers');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $GLOBALS['headers'][] = $row['header_name'];
+    }
 
-	// ─── ИСПРАВЛЕНО: корректный prepared statement + division_id ───
-    if ($podr == "m3x"){
-        $stmt = $dblite->prepare('SELECT * FROM employees WHERE city != ""');
+    $res = $db->query('SELECT * FROM division_list');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $GLOBALS['otdel'][] = $row['division_name'];
+    }
+
+    // 3. Загрузка сотрудников
+    $calcDay = (int)date('j', strtotime('now'));
+    
+    if ($podr == "m3x") {
+        $stmt = $db->prepare('SELECT * FROM employees WHERE city != ""');
     } else {
-        $stmt = $dblite->prepare('SELECT * FROM employees WHERE city = :city');
+        $stmt = $db->prepare('SELECT * FROM employees WHERE city = :city');
         $stmt->bindValue(':city', $podr, SQLITE3_TEXT);
     }
-    $res = $stmt->execute();
     
-    // Определяем день месяца запуска расчёта
-    $calcDay = (int)date('j', strtotime('now'));
+    $res = $stmt->execute();
+    if (!$res) {
+        error_log("SQLite Error in loadSettingsAndEmployees: " . $db->lastErrorMsg());
+        return;
+    }
 
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-        $fio = $row['fio'];
-        $div = $row['division'];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $fio = $row['fio'] ?? 'Неизвестный';
+        $div = $row['division'] ?? 'Неизвестный отдел';
+        
+        // Базовые данные
+        $employees[$div][$fio]['id']            = (int)$row['id'];
+        $employees[$div][$fio]['Ф.И.О']         = $fio;
+        $employees[$div][$fio]['otdel']         = $div;
+        $employees[$div][$fio]['division_id']   = (int)($row['division_id'] ?? 0);
+        
+        // Финансовые данные из БД
+        $employees[$div][$fio]['Оклад']         = (float)($row['oklad'] ?? 0);
+        $employees[$div][$fio]['Ставка']        = (float)($row['stavka'] ?? 0);
+        $employees[$div][$fio]['Ставка час']    = (float)($row['stavka_chas'] ?? 0);
+        $employees[$div][$fio]['Надбавки']      = (float)($row['nadbavka'] ?? 0);
+        $employees[$div][$fio]['Премия']        = (float)($row['premia'] ?? 0);
+        $employees[$div][$fio]['Долг']          = (float)($row['dolg'] ?? 0);
 
-		$employees[$div][$fio]['id']            = (int) $row['id'];
-		$employees[$div][$fio]['Ф.И.О']         = $fio;
-        $employees[$div][$fio]['division_id']   = (int) ($row['division_id'] ?? 0);
-		$employees[$div][$fio]['Оклад']         = (float) $row['oklad'] ?? 0;
-		
-		$employees[$div][$fio]['Ставка']        = (float) $row['stavka'] ?? 0;
-		$employees[$div][$fio]['Ставка час']    = (float) $row['stavka_chas'] ?? 0;
-		$employees[$div][$fio]['Надбавки']      = (float) $row['nadbavka'] ?? 0;
-		$employees[$div][$fio]['Доп.премия']    = (float) $row['dop_premia'] ?? 0;
-
-        // ... внутри цикла while ($row = $res->fetchArray(...)) ...
-
+        // Логика edit_delta для авансов/удержаний
         if ($calcDay <= edit_delta) {
-            // Если расчёт производится до числа указаного в edit_delta, аванс обнуляется для нового расчёта
-            $employees[$div][$fio]['Аванс']     = 0.0;
+            $employees[$div][$fio]['Аванс']       = 0.0;
+            $employees[$div][$fio]['Отпускные']   = 0.0;
+            $employees[$div][$fio]['Больничные']  = 0.0;
+            $employees[$div][$fio]['Удержания']   = 0.0;
         } else {
-            // Если после числа указаного в edit_delta, берём из базы данных
-            $employees[$div][$fio]['Аванс']     = (float)($row['avans'] ?? 0);
+            $employees[$div][$fio]['Аванс']       = (float)($row['avans'] ?? 0);
+            $employees[$div][$fio]['Отпускные']   = (float)($row['otpusknye'] ?? 0);
+            $employees[$div][$fio]['Больничные']  = (float)($row['bolnichnye'] ?? 0);
+            $employees[$div][$fio]['Удержания']   = (float)($row['uderjanie'] ?? 0);
         }
-		$employees[$div][$fio]['Отпускные']     = (float) $row['otpusknye'] ?? 0;
-		$employees[$div][$fio]['Больничные']    = (float) $row['bolnichnye'] ?? 0;
-		$employees[$div][$fio]['Удержания']     = (float) $row['uderjanie'] ?? 0;
 
-        // ─── ИНИЦИАЛИЗАЦИЯ РАСЧЁТНЫХ ПОЛЕЙ ───────
+        // Контакты
+        $tg_chat_id = preg_replace('/[^0-9]/', '', (string)($row['msg_chat_id'] ?? ''));
+        $employees[$div][$fio]['messenger_chat_id'] = ($tg_chat_id !== '') ? $tg_chat_id : null;
+        $emailRaw = isset($row['email']) ? trim((string)$row['email']) : '';
+        $employees[$div][$fio]['email'] = ($emailRaw !== '') ? $emailRaw : null;
+
+        // Инициализация расчетных полей (обнуление перед расчетом)
         $employees[$div][$fio]['Заявки']              = 0;
         $employees[$div][$fio]['КТУ Количество']      = 0;
         $employees[$div][$fio]['Строительные работы'] = 0;
@@ -98,21 +127,10 @@ function getSettings(){
         $employees[$div][$fio]['ЗП Часы']             = 0;
         $employees[$div][$fio]['ЗП КТУ']              = 0;
         $employees[$div][$fio]['% КТУ Личный']        = 0;
-        $employees[$div][$fio]['Итого']               = 0;
+        $employees[$div][$fio]['Итого ЗП']            = 0;
         $employees[$div][$fio]['На руки']             = 0;
-	}
-
-	$res = $dblite->query('SELECT * FROM table_headers');
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-		$GLOBALS['headers'][] = $row['header_name'];
-	}
-
-	$res = $dblite->query('SELECT * FROM division_list');
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-		$GLOBALS['otdel'][] = $row['division_name'];
-	}
-
-	$dblite->close();
+        $employees[$div][$fio]['Всего за мес.']       = 0;
+    }
 }
 
 /**
@@ -177,6 +195,20 @@ function getTasksByDivision(int $divisionId): array
     }
 
     return $allTasks;
+}
+
+// вспомогательная функция для getTasksByDivision()
+function ktuApiRequest(array $params): array
+{
+    $raw = httpPost($params);
+
+    if ($raw === false || $raw === null || $raw === '') {
+        return [];
+    }
+
+    $data = json_decode((string)$raw, true);
+
+    return is_array($data) ? $data : [];
 }
 
 /**
@@ -258,68 +290,6 @@ function httpPost($data){
     return $response;
 }
 
-/*
-	get_list
-	Описание: Список заданий (идентификаторы)
-	Необязательные параметры (условия выборки):
-	author_employee_id - ID сотрудника - автора задания (можно через запятую)
-	closer_employee_id - ID сотрудника, который закрыл (выполнил) задание (можно через запятую)
-	customer_id - ID абонента (можно через запятую)
-	date_add_from - дата создания задания (с)
-	date_add_to - дата создания задания (до)
-	date_change_from - дата обновления задания (с)
-	date_change_to - дата обновления задания (до)
-	date_do_from - дата на которую назначено выполнение задания (с)
-	date_do_to - дата на которую назначено выполнение задания (до)
-	date_finish_from - дата выполнения задания (с)
-	date_finish_to - дата выполнения задания (до)
-	division_id - ID подразделения (можно через запятую)
-	division_id_with_staff - ID подразделения (в т.ч. с заданиями сотрудников этого подразделения) (можно через запятую)
-	employee_id - ID исполнителя (можно через запятую, используйте -1 для получения заданий без исполнителей)
-	house_id - ID дома работ
-	is_expired - флаг - выводить только просроченные задания
-	node_id - ID объекта размещения
-	state_id - ID статуса заданий (можно через запятую)
-	task_position - координаты задания (там где это возможно. В формате lat,lng. Напр: 40.245218,52.333384)
-	task_position_radius - радиус от task_position (в метрах)
-	type_id - ID типа заданий (можно через запятую)
-	watcher_employee_id - ID сотрудника-наблюдателя за заданием (можно через запятую)
-	order_by - поле для сортировки (возможные варианты: date_add, date_change, date_do, date_finish, state_id, type_id)
-	limit - лимит выборки записей
-	offset - смещение выборки
-*/
-function getTaskList($id){
-	GLOBAL $dateFrom,$dateTo;
-	return array(
-		"key"=>key,
-		"cat"=>"task",
-		"action"=>"get_list",
-		"date_finish_from"=>$dateFrom,
-		"date_finish_to"=>$dateTo,
-		"state_id"=>"2",
-		"employee_id"=>$id
-	);
-}
-
-/*
-	show
-	Описание: Информация о задании
-	Обязательные параметры:
-	id - id задания (можно через запятую)
-	Необязательные параметры:
-	employee_id - id сотрудника, который просматривает это задание (для фиксации в историю по заданию)
-	is_without_comments - флаг - не выводить комментарии в информации по заданию
-*/
-function getTask($taskId){
-	return array(
-		"key"=>key,
-		"cat"=>"task",
-		"action"=>"show",
-		"is_without_comments"=>"1",
-		"id"=>$taskId
-	);
-}
-
 function getTaskType(){
 	return array(
 		"key"=>key,
@@ -340,97 +310,18 @@ function getTimesheet(){
 	);
 }
 
-// TODO переписать для атоматического добавления 'id' в массив при выборе города
-function getDivision(){
-	GLOBAL $podr;
-	switch ($podr) {
-		case 'Алчевск':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"1,9,10,12,20,23"
-			);
-		break;
-
-		case 'Зоринск':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"17"
-			);
-		break;
-
-		case 'Кировск':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"16"
-			);
-		break;
-
-		case 'Комиссаровка':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"18"
-			);
-		break;
-
-		case 'Стаханов':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"15"
-			);
-		break;
-
-		case 'Петровское':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"14"
-			);
-		break;
-
-		// для всех подразделений
-		case 'm3x':
-			return array(
-			"key"=>key,
-			"cat"=>"employee",
-			"action"=>"get_division",
-			"id"=>"1,9,10,12,14,15,16,17,18,20,23"
-			);
-		break;
-
-	}
+/**
+ * Возвращает экземпляр подключения к БД на время выполнения скрипта.
+ */
+function getDB(): SQLite3 {
+    static $db = null;
+    if ($db === null) {
+        $db = new SQLite3(SQL_DB);
+        $db->busyTimeout(5000);
+        $db->exec('PRAGMA journal_mode=WAL');
+    }
+    return $db;
 }
-
-function getEmployees(){
-	return array(
-		"key"=>key,
-		"cat"=>"employee",
-		"action"=>"get_data",
-		"id"=>""
-	);
-}
-
-function getEmployee($id){
-	return array(
-		"key"=>key,
-		"cat"=>"employee",
-		"action"=>"get_data",
-		"id"=>$id
-	);
-}
-
-// TODO - автоматизировать инициализацию начальными значениями
-$ktuALL = array('Алчевск_Монтажники' => 0, 'Строители-Алчевск' => 0, 'M@trix-Зоринск' => 0, 'M@trix-Кировск' => 0, 'M@trix-Комиссаровка' => 0, 'M@trix-Стаханов' => 0, 'M@trix-Петровское' => 0);
 
 function getCatalogType(): array
 {
@@ -450,226 +341,6 @@ function getTimeSheetData(): array
         $sheet = json_decode((string) $raw, true)['data'] ?? [];
     }
     return $sheet;
-}
-
-function getEmployeesList(){
-	GLOBAL $employees, $podr;
-	getSettings();  // загружает оклады/ставки из БД
-
-    $dblite = new SQLite3(SQL_DB);
-    $dblite->busyTimeout(5000);
-    $dblite->exec('PRAGMA journal_mode=WAL');
-
-    // ─── фильтр по городу ───────────────────────────
-    if ($podr == "m3x") {
-        $res = $dblite->query('SELECT * FROM employees WHERE city != ""');
-    } else {
-        $stmt = $dblite->prepare('SELECT * FROM employees WHERE city = :city');
-        $stmt->bindValue(':city', $podr, SQLITE3_TEXT);
-        $res = $stmt->execute();
-    }
-
-    if (!$res) {
-        // Обработка ошибки запроса (опционально, для отладки)
-        error_log("SQLite Error: " . $dblite->lastErrorMsg());
-        $dblite->close();
-        return;
-    }
-
-    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-        $div = $row['division'] ?? 'Неизвестный отдел';
-        $fio = $row['fio'] ?? 'Неизвестный сотрудник';
-
-        $employees[$div][$fio]['id']               = (int) $row['id'];
-        $employees[$div][$fio]['Ф.И.О']            = $fio;
-        $employees[$div][$fio]['otdel']            = $div;
-        $employees[$div][$fio]['division_id']      = (int) ($row['division_id'] ?? 0);
-        // Поля, которые будут рассчитаны позже (инициализируем нулями)
-        $employees[$div][$fio]['Заявки']           = 0;
-        $employees[$div][$fio]['% КТУ Личный']     = 0;
-        $employees[$div][$fio]['КТУ Количество']   = 0;
-        $employees[$div][$fio]['Часы']             = 0;
-        $employees[$div][$fio]['Часы Сверхурочные'] = 0;
-        $employees[$div][$fio]['Часы Выходные']    = 0;
-        $employees[$div][$fio]['ЗП Часы']          = 0;
-        $employees[$div][$fio]['ЗП КТУ']           = 0;
-        $employees[$div][$fio]['Строительные работы'] = 0;
-        $employees[$div][$fio]['Итого']            = 0;
-        $employees[$div][$fio]['На руки']          = 0;
-        
-        // Значения из БД (уже загружены в getSettings, но гарантируем наличие)
-        $employees[$div][$fio]['Ставка']       = (float) ($row['stavka'] ?? 0);
-        $employees[$div][$fio]['Ставка час']   = (float) ($row['stavka_chas'] ?? 0);
-        $employees[$div][$fio]['Надбавки']     = (float) ($row['nadbavka'] ?? 0);
-        $employees[$div][$fio]['Доп.премия']   = (float) ($row['dop_premia'] ?? 0);
-        $employees[$div][$fio]['Аванс']        = (float) ($row['avans'] ?? 0);
-        $employees[$div][$fio]['Отпускные']    = (float) ($row['otpusknye'] ?? 0);
-        $employees[$div][$fio]['Больничные']   = (float) ($row['bolnichnye'] ?? 0);
-        $employees[$div][$fio]['Удержания']    = (float) ($row['uderjanie'] ?? 0);
-        $employees[$div][$fio]['Оклад']        = (float) ($row['oklad'] ?? 0);
-        
-        // Telegram chat_id
-        $tg_chat_id = preg_replace('/[^0-9]/', '', (string)($row['msg_chat_id'] ?? ''));
-        $employees[$div][$fio]['messenger_chat_id'] = ($tg_chat_id !== '') ? $tg_chat_id : null;
-
-        // E-Mail
-        $emailRaw = isset($row['email']) ? trim((string)$row['email']) : '';
-        $employees[$div][$fio]['email'] = ($emailRaw !== '') ? $emailRaw : null;
-    
-    }
-    $dblite->close();
-}
-
-/**
- * Получение и обработка задач одного сотрудника (поштучные запросы к API).
- * UserSide API не поддерживает батчинг employee_id через запятую,
- * поэтому делаем 2 запроса на сотрудника.
- */
-function getKTU($employeeID, $surname, $division){
-	$employeeID = (int) $employeeID;
-    if ($employeeID <= 0) {
-        return;
-    }
-
-	GLOBAL $employees, $catalogType;
-
-	// Ленивая загрузка каталога типов
-    if (!is_array($catalogType) || empty($catalogType)) {
-        $raw = httpPost(getTaskType());
-        $catalogType = json_decode((string) $raw, true)['Data'] ?? [];
-    }
-
-	// Строительные типы заявок (static — инициализируется один раз)
-	// array_flip() позволяет проверять наличие через isset() быстрее, чем in_array().
-	static $stroikaTypes = null;
-	if ($stroikaTypes === null) {
-		$stroikaTypes = array_flip([65,74,19,6,24,31,23,21,20,75,77,82]);	//номера строительных заявок
-	}
-
-	if (!isset($employees[$division][$surname])) {
-        $employees[$division][$surname] = [];
-    }
-
-	// Работаем через ссылку, чтобы не писать каждый раз длинный путь.
-    $emp = &$employees[$division][$surname];
-
-	// ─── Запрос 1: Список задач сотрудника ────────────────────
-    $listData = ktuApiRequest(getTaskList($employeeID));	// ← API запрос на сотрудника
-	$ids = $listData['list'] ?? '';
-
-	// На случай, если API вдруг вернет массив, а не строку.
-    if (is_array($ids)) {
-        $ids = implode(',', $ids);
-    }
-
-	// Убираем лишние запятые и пробелы по краям.
-    $ids = trim((string)$ids, " \t\n\r\0\x0B,");
-
-	// Вариант ответа:
-    // {"list":"","count":0,"Result":"OK"}
-    if ($ids === '') {
-        return;
-    }
-
-	// ─── Запрос 2: Детали задач ───────────────────────────────
-    $taskData = ktuApiRequest(getTask($ids));			// ← API запрос на сотрудника
-    $tasks = $taskData['Data'] ?? [];
-
-    if (!is_array($tasks) || empty($tasks)) {
-        return;
-    }
-
-    // Если API вернул одну заявку как объект, а не массив,
-    // приводим к массиву, чтобы дальше обрабатывать одинаково.
-    if (isset($tasks['type'])) {
-        $tasks = [$tasks];
-    }
-
-	// ─── Обработка задач ──────────────────────────────────────
-	$zayavki = [];
-    $stroikaSum = 0.0;
-	$catalog = is_array($catalogType) ? $catalogType : [];
-
-	foreach ($tasks as $task) {
-        if (!is_array($task)) {
-            continue;
-        }
-
-        $typeId = (int)($task['type']['id'] ?? 0);
-
-        if ($typeId <= 0) {
-            continue;
-        }
-
-        // Обычная заявка.
-        if (!isset($stroikaTypes[$typeId])) {
-            $typeName = (string)($task['type']['name'] ?? '');
-
-            // Считаем количество заявок по типу.
-            // Это потом позволит обновить динамические столбцы одним циклом.
-            if ($typeName !== '') {
-                $zayavki[$typeName] = ($zayavki[$typeName] ?? 0) + 1;
-            }
-            continue;
-        }
-
-        // Строительная заявка.
-        $amount = $catalog[$typeId]['amount'] ?? 0;
-        $volume = $task['volumeCustom'] ?? 0;
-        $staff = $task['staff']['employee'] ?? [];
-
-        // Если staff.employee пришел не массивом.
-        if (!is_array($staff)) {
-            $staff = ($staff === null || $staff === '') ? [] : [$staff];
-        }
-
-        $staffCount = count($staff);
-        // Защита от деления на 0.
-        if ($staffCount > 0) {
-            $stroikaSum += round(($amount * $volume) / $staffCount, 2);
-        }
-    }
-
-    // ─── Обновляем данные сотрудника ──────────────────────────
-	if (!empty($zayavki)) {
-        // Обновляем динамические столбцы по названиям типов заявок.
-        // Например: $employees[$division][$surname]['Тип заявки'] += количество.
-        foreach ($zayavki as $workName => $count) {
-            $emp[$workName] = ($emp[$workName] ?? 0) + $count;
-        }
-
-        // Общее количество обычных заявок.
-        $emp['Заявки'] = array_sum($zayavki);
-
-        // КТУ по classifier (кроме строителей)
-		// Для строителей КТУ считается отдельно по часам.
-        if ($division !== 'Строители-Алчевск') {
-            $classifier = $GLOBALS['classifier'] ?? [];
-            $ktuCount = 0;
-
-            foreach ($zayavki as $workName => $count) {
-                if (isset($classifier[$workName])) {
-                    $ktuCount += $classifier[$workName] * $count;
-                } else {
-                    // Если нужно видеть, для какого типа работы нет КТУ:
-                    // error_log("getKTU: нет КТУ для '{$workName}', подразделение {$division}");
-                }
-            }
-
-            if ($ktuCount > 0) {
-                $emp['КТУ Количество'] = ($emp['КТУ Количество'] ?? 0) + $ktuCount;
-                $GLOBALS['ktuALL'][$division] =
-                    ($GLOBALS['ktuALL'][$division] ?? 0) + $ktuCount;
-            }
-        }
-    }
-
-    if ($stroikaSum != 0.0) {
-        // Название ключа оставляем как в текущей системе:
-        // "Строительные работы", чтобы не ломать шаблоны/экспорт.
-        $emp['Строительные работы'] =
-            ($emp['Строительные работы'] ?? 0) + $stroikaSum;
-    }
 }
 
 function timesheet($employeeID, $surname, $division){
@@ -905,22 +576,26 @@ function new_calc_solary($division)
         $employees[$division][$surname]['ЗП КТУ'] =
             floor($fondKtu * ($pct / 100));
 
-        // Итого
-        $employees[$division][$surname]['Итого'] =
+        // Итого ЗП
+        $employees[$division][$surname]['Итого ЗП'] =
             ($employees[$division][$surname]['Ставка'] ?? 0) +
             ($employees[$division][$surname]['ЗП Часы'] ?? 0) +
             ($employees[$division][$surname]['ЗП КТУ'] ?? 0) +
             ($employees[$division][$surname]['Строительные работы'] ?? 0) +
             ($employees[$division][$surname]['Надбавки'] ?? 0) +
-            ($employees[$division][$surname]['Доп.премия'] ?? 0) +
-            ($employees[$division][$surname]['Отпускные'] ?? 0) +
-            ($employees[$division][$surname]['Больничные'] ?? 0) -
+            ($employees[$division][$surname]['Премия'] ?? 0)  -
             ($employees[$division][$surname]['Удержания'] ?? 0);
 
         // На руки
         $employees[$division][$surname]['На руки'] =
-            ($employees[$division][$surname]['Итого'] ?? 0) -
+            ($employees[$division][$surname]['Итого ЗП'] ?? 0) -
             ($employees[$division][$surname]['Аванс'] ?? 0);
+
+        // Всего
+        $employees[$division][$surname]['Всего за мес.'] =
+            ($employees[$division][$surname]['На руки'] ?? 0) +
+            ($employees[$division][$surname]['Больничные'] ?? 0) +
+            ($employees[$division][$surname]['Отпускные'] ?? 0);
     }
 
     ksort($employees[$division]);
@@ -928,75 +603,70 @@ function new_calc_solary($division)
 
 function main(){
 	GLOBAL $podr;
-	getEmployeesList();
+	loadSettingsAndEmployees(); //getEmployeesList();
 	if (in_array($podr, arr_city)){
-		$dblite = new SQLite3(SQL_DB);
+		$db = getDB();
 		// тут пробегаем по всем подразделениям или только по одному городу
-		if($podr == "m3x"){$res = $dblite->query("SELECT * FROM division_list WHERE city != ''");}
+		if($podr == "m3x"){$res = $db->query("SELECT * FROM division_list WHERE city != ''");}
 		else {
-            $stmt = $dblite->prepare("SELECT * FROM division_list WHERE city = :city");
+            $stmt = $db->prepare("SELECT * FROM division_list WHERE city = :city");
             $stmt->bindValue(':city', $podr, SQLITE3_TEXT);
             $res = $stmt->execute();
         }
 
 		while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-			$rowDivision[] = $row['division_name'];
+            $rowDivision[] = $row['division_name'];
 		}
-		$dblite->close();
 
 	}else{
 		exit("Error: bad_podr: ".$podr);
 	}
 
-	foreach ($rowDivision as $row) {
-		new_calc_solary($row);
-	}
-}
-
-// вспомогательная функция для getKTU()
-function ktuApiRequest(array $params): array
-{
-    $raw = httpPost($params);
-
-    if ($raw === false || $raw === null || $raw === '') {
-        return [];
+	if (empty($rowDivision)) {
+        exit("Error: no divisions found for: ".$podr);
     }
-
-    $data = json_decode((string)$raw, true);
-
-    return is_array($data) ? $data : [];
+    foreach ($rowDivision as $row) {
+        new_calc_solary($row);
+    }
 }
 
 // пункт настроек оплаты сотруднику
 function setPeople($division){
 	GLOBAL $smarty;
-	//echo($division." <br>");
-	$dblite = new SQLite3(SQL_DB);
-	$ktuFondDivision = $dblite->query("SELECT * FROM fond_ktu WHERE otdel = '$division'");
+	$db = getDB();
 
-	$resKtu[] = $ktuFondDivision->fetchArray(SQLITE3_ASSOC);
-	$smarty -> assign('resKtu', $resKtu);
+	// Безопасный запрос 1
+    $stmt = $db->prepare("SELECT * FROM fond_ktu WHERE otdel = :otdel");
+    $stmt->bindValue(':otdel', $division, SQLITE3_TEXT);
+    $resKtu = [];
+    $ktuRes = $stmt->execute();
+    while ($row = $ktuRes->fetchArray(SQLITE3_ASSOC)) {
+        $resKtu[] = $row;
+    }
+    $smarty->assign('resKtu', $resKtu);
 
-	$res = $dblite->query("SELECT * FROM employees WHERE division = '$division' ORDER BY fio ASC");
-	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-		$resPeople[] = $row;
-	}
-	$dblite->close();
-
-	$smarty -> assign('resPeople', $resPeople);
-	$smarty -> display('api/setPeople.tpl'); //публикуем шаблон
+    // Безопасный запрос 2
+    $stmt2 = $db->prepare("SELECT * FROM employees WHERE division = :division ORDER BY fio ASC");
+    $stmt2->bindValue(':division', $division, SQLITE3_TEXT);
+    $resPeople = [];
+    $empRes = $stmt2->execute();
+    while ($row = $empRes->fetchArray(SQLITE3_ASSOC)) {
+        $resPeople[] = $row;
+    }
+    
+    $smarty->assign('resPeople', $resPeople);
+    $smarty->display('api/setPeople.tpl');  //публикуем шаблон
 }
 
 // пункт настроек "Фонд КТУ"
 function setFondKTU(){
     global $smarty;
 
-	$dblite = new SQLite3(SQL_DB);
-	$res = $dblite->query("SELECT * FROM fond_ktu ORDER BY otdel ASC");
+	$db = getDB();
+	$res = $db->query("SELECT * FROM fond_ktu ORDER BY otdel ASC");
     while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
 		$resKtu[] = $row;
 	}
-    $dblite->close();
 
     $smarty -> assign('resKtu', $resKtu);
 	$smarty -> display('api/setFondKTU.tpl'); //публикуем шаблон
@@ -1007,12 +677,11 @@ function setFondKTU(){
 function setKTU(){
     global $smarty;
 
-	$dblite = new SQLite3(SQL_DB);
-	$res = $dblite->query("SELECT * FROM ktu");
+	$db = getDB();
+	$res = $db->query("SELECT * FROM ktu");
 	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
 		$resKtu[] = $row;
 	}
-	$dblite->close();
 
     $smarty -> assign('resKtu', $resKtu);
 	$smarty -> display('api/setKTU.tpl'); //публикуем шаблон
@@ -1023,13 +692,11 @@ function setKTU(){
 function setChasy(){
 	global $smarty;
 
-	$dblite = new SQLite3(SQL_DB);
-	$res = $dblite->query("SELECT * FROM chasy");
+	$db = getDB();
+	$res = $db->query("SELECT * FROM chasy");
 	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
 		$rowChasy[] = $row;
 	}
-
-	$dblite->close();
 
 	$smarty -> assign('rowChasy', $rowChasy);
 	$smarty -> display('api/setChasy.tpl'); //публикуем шаблон
@@ -1220,14 +887,12 @@ function loadArchiveDictionaries(): void
     global $classifier, $headers;
 
     try {
-        $dblite = new SQLite3(SQL_DB);
-        $dblite->busyTimeout(5000);
-        $dblite->exec('PRAGMA journal_mode=WAL');
+        $db = getDB();
 
         if (empty($classifier)) {
             $classifier = [];
 
-            $res = $dblite->query('SELECT * FROM ktu');
+            $res = $db->query('SELECT * FROM ktu');
 
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $classifier[$row['type_of_work']] = $row['work_ktu'];
@@ -1237,14 +902,13 @@ function loadArchiveDictionaries(): void
         if (empty($headers)) {
             $headers = [];
 
-            $res = $dblite->query('SELECT * FROM table_headers');
+            $res = $db->query('SELECT * FROM table_headers');
 
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $headers[] = $row['header_name'];
             }
         }
 
-        $dblite->close();
     } catch (Throwable $e) {
         error_log('loadArchiveDictionaries: ' . $e->getMessage());
     }
@@ -1317,15 +981,19 @@ switch ($_POST['nastr']) {
         break;
 
 	case 'zarplata':
-        $startTime = microtime(true);
+        if (is_debug){
+            $startTime = microtime(true);
+        }
 		main();
         saveCalcArchive();		// Сохраняем расчёт в архив
         // Явно запрещаем редактирование аванса при первичном расчёте
-        $GLOBALS['is_editable_avans'] = false;
+        $GLOBALS['is_editable_archive'] = false;
 		excel();
 		html();
-        $elapsed = round(microtime(true) - $startTime, 3);
-        echo "<h3 style='color:green;'>Расчёт завершен за {$elapsed} сек.</h3>";
+        if (is_debug){
+            $elapsed = round(microtime(true) - $startTime, 3);
+            echo "<h3 style='color:green;'>Расчёт завершен за {$elapsed} сек.</h3>";
+        }
 		break;
 	
 	// Загрузка архива по дате и городу из папки /archive/
@@ -1343,7 +1011,7 @@ switch ($_POST['nastr']) {
         }
 
         // ══════════════════════════════════════════════
-        // РАСЧЕТ ФЛАГА is_editable_avans ДЛЯ АРХИВА
+        // РАСЧЕТ ФЛАГА is_editable_archive ДЛЯ АРХИВА
         // ══════════════════════════════════════════════
         
         // Вариант А: Разрешаем редактирование, если дата архива 
@@ -1351,12 +1019,11 @@ switch ($_POST['nastr']) {
         $now = strtotime(date('Y-m-d'));
         $calcDate = strtotime($archiveDate);
         $diffDays = abs($now - $calcDate) / 86400;
-        $GLOBALS['is_editable_avans'] = ($diffDays <= edit_delta);
-        //$GLOBALS['is_editable_avans'] = true;
+        $GLOBALS['is_editable_archive'] = ($diffDays <= edit_delta);
         /* 
         // Вариант Б (если логика должна быть такой же, как при первичном расчете):
         // Разрешаем редактирование только если текущий день месяца <= edit_delta
-        // $GLOBALS['is_editable_avans'] = ((int)date('j') <= edit_delta); 
+        // $GLOBALS['is_editable_archive'] = ((int)date('j') <= edit_delta); 
         */
         // ══════════════════════════════════════════════
 
@@ -1374,7 +1041,7 @@ switch ($_POST['nastr']) {
         }
         
         // Используем функцию загрузки архива. 
-        // Она корректно ищет файл по шаблону YYYY-MM-DD_city.json
+        // Она ищет файл по шаблону YYYY-MM-DD_city.json
         $payload = loadCalcArchiveByDateCity($archiveDate, $city);
         
         // applyCalcArchive автоматически установит глобальные переменные:

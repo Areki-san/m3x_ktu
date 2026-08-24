@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
+if (is_debug){
+    error_reporting(E_ALL);
+    ini_set('display_errors', '1');
+}
 
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
 
 require_once 'conf.php';
 require_once 'api/us_api.php';
@@ -52,10 +54,11 @@ $schemas = [
         stavka          REAL NOT NULL DEFAULT 0,
         nadbavka        REAL NOT NULL DEFAULT 0,
         avans           REAL NOT NULL DEFAULT 0,
-        dop_premia      REAL NOT NULL DEFAULT 0,
+        premia          REAL NOT NULL DEFAULT 0,
         otpusknye       REAL NOT NULL DEFAULT 0,
         bolnichnye      REAL NOT NULL DEFAULT 0,
         uderjanie       REAL NOT NULL DEFAULT 0,
+        dolg            REAL NOT NULL DEFAULT 0,
         division        TEXT NOT NULL,
         division_id     INTEGER NOT NULL DEFAULT 0,
         city            TEXT NOT NULL
@@ -105,9 +108,13 @@ if (update_mode){
     if (!isset($columns_info['oklad']))       { $need_migration = true; echo "  - Отсутствует колонка 'oklad'<br>"; }
     if (!isset($columns_info['bolnichnye']))  { $need_migration = true; echo "  - Отсутствует колонка 'bolnichnye'<br>"; }
     if (!isset($columns_info['otpusknye']))   { $need_migration = true; echo "  - Отсутствует колонка 'otpusknye'<br>"; }
+    if (!isset($columns_info['dolg']))        { $need_migration = true; echo "  - Отсутствует колонка 'dolg'<br>"; }
 
     // Проверяем, есть ли колонка, которую нужно удалить
     if (isset($columns_info['shtraf']))       { $need_migration = true; echo "  - Лишняя колонка 'shtraf' (будет удалена)<br>"; }
+
+    // Проверяем, есть ли колонка, которую нужно удалить
+    if (isset($columns_info['dop_premia']))   { $need_migration = true; echo "  - Колонка 'premia' будет переименована в premia<br>"; }
 
     // Проверяем, есть ли UNIQUE на fio (нужно убрать)
     if (isset($columns_info['fio'])) {
@@ -142,11 +149,12 @@ if (update_mode){
                     stavka_chas     REAL NOT NULL DEFAULT 0,
                     stavka          REAL NOT NULL DEFAULT 0,
                     nadbavka        REAL NOT NULL DEFAULT 0,
-                    avans           REAL NOT NULL DEFAULT 0,
-                    dop_premia      REAL NOT NULL DEFAULT 0,
-                    otpusknye       REAL NOT NULL DEFAULT 0,
-                    bolnichnye      REAL NOT NULL DEFAULT 0,
+                    premia          REAL NOT NULL DEFAULT 0,
                     uderjanie       REAL NOT NULL DEFAULT 0,
+                    avans           REAL NOT NULL DEFAULT 0,
+                    bolnichnye      REAL NOT NULL DEFAULT 0,
+                    otpusknye       REAL NOT NULL DEFAULT 0,
+                    dolg            REAL NOT NULL DEFAULT 0,
                     division        TEXT NOT NULL,
                     division_id     INTEGER NOT NULL DEFAULT 0,
                     city            TEXT NOT NULL
@@ -157,15 +165,18 @@ if (update_mode){
             if (isset($columns_info['id'])) {
                 $db->exec("
                     INSERT INTO employees_new (
-                        id, msg_chat_id, fio, oklad, stavka_chas, stavka,
-                        nadbavka, avans, dop_premia, otpusknye, bolnichnye,
-                        uderjanie, division, division_id, city
+                        id, fio,
+                        oklad,
+                        stavka_chas, stavka, nadbavka, premia, uderjanie,
+                        avans, bolnichnye, otpusknye, dolg,
+                        division, division_id, city
                     )
                     SELECT
-                        id, msg_chat_id, fio,
-                        0, stavka_chas, stavka, nadbavka, avans, dop_premia,
-                        0, 0,
-                        uderjanie, division, division_id, city
+                        id, fio,
+                        oklad,
+                        stavka_chas, stavka, nadbavka, premia, uderjanie,
+                        avans, bolnichnye, otpusknye, dolg,
+                        division, division_id, city
                     FROM employees
                 ");
                 echo "  ✓ Данные скопированы в новую структуру<br>";
@@ -213,20 +224,22 @@ if (update_mode){
         'Часы',
         'Часы Сверхурочные',
         'Часы Выходные',
-        'Ставка',
         'Ставка час',
         'ЗП Часы',
+        'Ставка',
         'ЗП КТУ',
         'Строительные работы',
         'Надбавки',
-        'Доп.премия',
-        'Отпускные',
-        'Больничные',
-        'Итого',
+        'Премия',
+        'Удержания',
+        'Итого ЗП',
         'Оклад',
         'Аванс',
-        'Удержания',
-        'На руки'
+        'На руки',
+        'Больничные',
+        'Отпускные',
+        'Всего за мес.',
+        'Долг'
     ];
 
     $stmt = $db->prepare("INSERT INTO table_headers (header_name, sort_order) VALUES (?, ?)");

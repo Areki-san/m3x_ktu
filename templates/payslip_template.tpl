@@ -67,22 +67,21 @@ td { padding: 10px 5px; font-size: 14px; }
 {/if}
 
 <tr><td class="label">Надбавки:</td><td class="value">{$allowances}</td></tr>
-<tr><td class="label">Доп.премия:</td><td class="value">{$bonus}</td></tr>
-
-{if $show_vacation}
-    <tr><td class="label">Отпускные:</td><td class="value">{$vacation_pay}</td></tr>
-{/if}
-
-{if $show_sick}
-    <tr><td class="label">Больничные:</td><td class="value">{$sick_leave}</td></tr>
-{/if}
-
+<tr><td class="label">Премия:</td><td class="value">{$bonus}</td></tr>
 <tr><td class="label">Удержания/Штраф:</td><td class="value">{$deductions}</td></tr>
-<tr class="total-row"><td class="label"><strong>Итого:</strong></td><td class="value"><strong>{$total}</strong></td></tr>
+<tr class="total-row"><td class="label"><strong>Итого ЗП:</strong></td><td class="value"><strong>{$total}</strong></td></tr>
 <tr><td class="label">Аванс:</td><td class="value">{$advance}</td></tr>
 </table>
 <table class="net-salary">
 <tr><td class="label">На руки:</td><td class="value">{$net_salary}</td></tr>
+<table>
+{if $show_vacation}
+    <tr class="total-row"><td class="label">+ Отпускные:</td><td class="value">{$vacation_pay}</td></tr>
+{/if}
+
+{if $show_sick}
+    <tr class="total-row"><td class="label">+ Больничные:</td><td class="value">{$sick_leave}</td></tr>
+{/if}
 </table>
 </div>
 <div class="footer">Это автоматическое уведомление. По всем вопросам обращайтесь в бухгалтерию.</div>

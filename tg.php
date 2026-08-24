@@ -31,9 +31,9 @@ foreach ($result_parse as $emp_json => $value) {
 	$BE_SALARY	= $value['ЗП КТУ'];
 	$Construction_work	= $value['Строительные работы'];
 
-	$Total		= $value['Итого'];
+	$Total		= $value['Итого ЗП'];
 	$Advance	= $value['Аванс'];
-	$Additional_bonus	= $value['Доп.премия'];
+	$Additional_bonus	= $value['Премия'];
 	$Withholdings	= $value['Удержания'];
 	$Penalty	= $value['Штраф'];
 	$On_hand	= $value['На руки'];
@@ -56,9 +56,9 @@ foreach ($result_parse as $emp_json => $value) {
 	if ($Construction_work != 0)
 		$str .=	"\r\nСтроительные работы: " . "\t" . $Construction_work;
 	
-	$str .=	"\r\nИтого: " . "\t" . $Total
+	$str .=	"\r\nИтого ЗП: " . "\t" . $Total
 		 . "\r\nАванс: " . "\t" . $Advance
-		 . "\r\nДоп.премия: " . "\t" . $Additional_bonus
+		 . "\r\nПремия: " . "\t" . $Additional_bonus
 		 . "\r\nУдержания: " . "\t" . $Withholdings
 		 . "\r\nШтраф: " . "\t" . $Penalty
 		 . "\r\nНа руки: " . "\t" . $On_hand;

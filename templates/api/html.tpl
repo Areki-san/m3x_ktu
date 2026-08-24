@@ -9,8 +9,8 @@
 </div>
 {* === ФОРМА ДЛЯ СОХРАНЕНИЯ АВАНСОВ === *}
 <form id="settings">
-    {* Скрытые поля: 'avans' для безопасного обновления handler.php только этого поля *}
-    <input type="hidden" name="type" value="avans">
+    {* Скрытые поля: 'archive' для безопасного обновления handler.php только этого поля *}
+    <input type="hidden" name="type" value="archive">
 	{* === передаём город и дату для поиска файла архива === *}
     <input type="hidden" name="archive_date" value="{$arr_date}">
     <input type="hidden" name="city" value="{$podr}">
@@ -37,20 +37,29 @@
                         {if $array_head == "Заявки" && $personal_info['Заявки'] > 0}
                             <td><button type='button' class='btn btn-link' data-toggle='modal' data-target='#modal{$personal_info['id']}'>{$personal_info['Заявки']}</button></td>
                         
-                        {* === УСЛОВИЕ ДЛЯ КОЛОНКИ "АВАНС" === *}
-                        {elseif $array_head == 'Аванс'}
-                            {if $is_editable_avans}
-                                {* До 10-го числа: поле для ввода *}
+                        {* === УСЛОВИЕ ДЛЯ РЕДАКТИРУЕМЫХ ПОЛЕЙ БУХГАЛТЕРИИ === *}
+                        {elseif $array_head == 'Аванс' || $array_head == 'Премия' || $array_head == 'Премия ' || $array_head == 'Доп.премия' || $array_head == 'Доп.премия ' || $array_head == 'Больничные' || $array_head == 'Больничные ' || $array_head == 'Отпускные' || $array_head == 'Отпускные '}
+                            {if $is_editable_archive}
+                                {* Определяем имя поля для отправки в handler.php (без пробелов) *}
+                                {assign var="db_field" value="avans"}
+                                {* Определяем имя поля для отправки в handler.php (всегда 'premia' для премии, независимо от старого названия в JSON) *}
+                                {if $array_head == 'Премия' || $array_head == 'Премия ' || $array_head == 'Доп.премия' || $array_head == 'Доп.премия '}
+                                    {assign var="db_field" value="premia"}
+                                {elseif $array_head == 'Больничные' || $array_head == 'Больничные '}
+                                    {assign var="db_field" value="bolnichnye"}
+                                {elseif $array_head == 'Отпускные' || $array_head == 'Отпускные '}
+                                    {assign var="db_field" value="otpusknye"}
+                                {/if}
                                 <td>
-                                    <input type="number" 
+                                    <input type="number"
                                            class="form-control text-center" 
-                                           name="{$personal_info.id}[avans]" 
-                                           value="{$personal_info.$array_head}"
+                                           name="{$personal_info.id}[{$db_field}]" 
+                                           value="{$personal_info.$array_head|default:0}"  
                                            style="min-width: 12ch;">
                                 </td>
                             {else}
-                                {* После 10-го числа: только текст из БД *}
-                                <td>{$personal_info.$array_head}</td>
+                                {* Если редактирование запрещено: только текст из БД/JSON *}
+                                <td>{$personal_info.$array_head|default:0}</td>
                             {/if}
                         
                         {else}
@@ -116,7 +125,7 @@
 	<!-- <button class="btn btn-primary mr-sm-2" onclick="alert('Привет, StackOverflow!')">Нажмите на меня!</button> -->
 	<!--<input type="button" id="send_tabulka" class="btn btn-primary mr-sm-2" value="send to TG" onclick="requst_php('settings','tg.php');" />-->
 	<input type="button" id="send_tabulka" class="btn btn-primary mr-sm-2" value="send to EMail" onclick="requst_php('settings','mail.php');" />
-{if $is_editable_avans}
-	<input type="button" id="save_avans" class="btn btn-primary mr-sm-2" value="Сохранить авансы" onclick="requst_Json('settings','handler.php');" />
+{if $is_editable_archive}
+	<input type="button" id="save_archive" class="btn btn-primary mr-sm-2" value="Внести изменения" onclick="requst_Json('settings','handler.php');" />
 {/if}
 </div>

@@ -8,7 +8,7 @@ function excel(){
 
 	GLOBAL $employees, $classifier, $headers, $podr, $dateFrom, $dateTo, $created_at;
 
-    // Порядок и состав колонок листа "Ведомость" (A..S)
+    // Порядок и состав колонок листа "Ведомость" (A..U)
     // head    - текст шапки
     // key     - ключ массива $employees
     // group   - группа для двухуровневой шапки ("Часы")
@@ -20,19 +20,21 @@ function excel(){
         array('head' => 'Обычные',             'key' => 'Часы',              'group' => 'Часы'),   // D
         array('head' => 'Сверхурочные',        'key' => 'Часы Сверхурочные', 'group' => 'Часы'),   // E
         array('head' => 'Выходные',            'key' => 'Часы Выходные',     'group' => 'Часы'),   // F
-        array('head' => 'Ставка',              'key' => 'Ставка'),                                 // G
-        array('head' => 'Ставка час',          'key' => 'Ставка час'),                             // H
-        array('head' => 'ЗП Часы',             'key' => 'ЗП Часы'),                                // I
+        array('head' => 'Ставка час',          'key' => 'Ставка час'),                             // G
+        array('head' => 'ЗП Часы',             'key' => 'ЗП Часы'),                                // H
+        array('head' => 'Ставка',              'key' => 'Ставка'),                                 // I
         array('head' => 'ЗП КТУ',              'key' => 'ЗП КТУ'),                                 // J
         array('head' => 'Строительные работы', 'key' => 'Строительные работы'),                    // K
         array('head' => 'Надбавки',            'key' => 'Надбавки'),                               // L
-        array('head' => 'Доп.премия',          'key' => 'Доп.премия'),                             // M
-        array('head' => 'Отпускные',           'key' => 'Отпускные'),                              // N
-        array('head' => 'Больничные',          'key' => 'Больничные'),                             // O
-        array('head' => 'Удержания/Штраф',     'key' => 'Удержания'),                              // P
-        array('head' => 'Итого',               'key' => 'Итого',   'formula' => '=G{line}+I{line}+J{line}+K{line}+L{line}+M{line}+N{line}+O{line}-P{line}'), // Q
-        array('head' => 'Аванс',               'key' => 'Аванс'),                                  // R
-        array('head' => 'На руки',             'key' => 'На руки', 'formula' => '=Q{line}-R{line}'), // S
+        array('head' => 'Премия',              'key' => 'Премия'),                                 // M
+        array('head' => 'Удержания/Штраф',     'key' => 'Удержания'),                              // N
+        array('head' => 'Итого начислено Заработной платы','formula' => '=H{line}+I{line}+J{line}+K{line}+L{line}+M{line}-N{line}'), // O
+        array('head' => 'Аванс',               'key' => 'Аванс'),                                  // P
+        array('head' => 'На руки',            				'formula' => '=O{line}-P{line}'),      // Q
+        array('head' => 'Больничные',          'key' => 'Больничные'),                             // R
+        array('head' => 'Отпускные',           'key' => 'Отпускные'),                              // S
+        array('head' => 'Всего на карту за месяц',  		'formula' => '=Q{line}+R{line}+S{line}'),	// T
+        array('head' => 'Долг',               'key' => 'Долг'),                                  // U
     );
 
 	$spreadsheet = new Spreadsheet();
@@ -81,17 +83,19 @@ function excel(){
         'Ставка час'          => 9 ,  // уже + перенос
         'Строительные работы' => 14,  // уже + перенос
         'Удержания/Штраф'     => 12,  // уже + перенос
+        'Итого начислено Заработной платы' => 18, // уже + перенос
+        'Всего на карту за месяц'          => 14, // уже + перенос
     );
 
     // в этих шапках включаем перенос строк
-    $wrapText = array('% КТУ Личный', 'Ставка час', 'Строительные работы', 'Удержания/Штраф');
+    $wrapText = array('% КТУ Личный', 'Ставка час', 'Строительные работы', 'Удержания/Штраф', 'Итого начислено Заработной платы', 'Всего на карту за месяц');
 
     // ---- СТРОКА 1: период и дата формирования файла ----
     $periodText = 'Период: с ' . date('Y-m-d', strtotime($dateFrom))
                 . ' по '       . date('Y-m-d', strtotime($dateTo))
                 . ' от '       . date('Y-m-d', strtotime($created_at));
 
-    $sheet->mergeCells('A1:S1');
+    $sheet->mergeCells('A1:U1');
     $sheet->setCellValue('A1', $periodText);
     $sheet->getRowDimension(1)->setRowHeight(20);
     $sheet->getStyle('A1')->applyFromArray($styleArray);
@@ -109,9 +113,9 @@ function excel(){
 	foreach ($employees as $division_name => $division_staff) {
 
 		// ---- название подразделения ----
-        $sheet->mergeCells('A'.$line.':'.'S'.$line);
+        $sheet->mergeCells('A'.$line.':'.'U'.$line);
 		$sheet->setCellValue('A'.$line, $division_name);
-		$sheet->getStyle('A'.$line.':'.'S'.$line)->applyFromArray($styleArray);
+		$sheet->getStyle('A'.$line.':'.'U'.$line)->applyFromArray($styleArray);
 		$line++;
 
         // ---- двухуровневая шапка ----
@@ -172,12 +176,25 @@ function excel(){
 
             foreach ($columns as $col) {
                 if (isset($col['formula'])) {
-                    // Итого / На руки - считаем формулой в Excel
+                    // Итого ЗП / На руки - считаем формулой в Excel
                     $sheet
                         ->setCellValue($cell.$line, str_replace('{line}', $line, $col['formula']))
                         ->getStyle($cell.$line)->applyFromArray($styleArray);
                 } else {
-                    $value = isset($personal_info[$col['key']]) ? $personal_info[$col['key']] : '';
+                    $key = $col['key'];
+    
+                    // Поддержка старого ключа 'Доп.премия' для колонки 'Премия'
+                    if ($key === 'Премия') {
+                        $value = '';
+                        // Ищем значение в порядке приоритета: новый ключ → старый ключ
+                        if (array_key_exists('Премия', $personal_info)) {
+                            $value = $personal_info['Премия'];
+                        } elseif (array_key_exists('Доп.премия', $personal_info)) {
+                            $value = $personal_info['Доп.премия'];
+                        }
+                    } else {
+                        $value = isset($personal_info[$key]) ? $personal_info[$key] : '';
+                    }
                     $sheet
                         ->setCellValue($cell.$line, $value)
                         ->getStyle($cell.$line)->applyFromArray($styleArray);
@@ -195,7 +212,7 @@ function excel(){
 
             //$sheet_2->getColumnDimension($column[$column_pos_1])->setAutoSize(true);
             $sheet_2->getColumnDimension($column[$column_pos_1])->setWidth(21);
-			$sheet_2->getColumnDimension($column[$column_pos_2])->setWidth(16);
+			$sheet_2->getColumnDimension($column[$column_pos_2])->setWidth(17);
 			$sheet_2->getColumnDimension($column[$column_pos_3])->setWidth(4);
 
 			$column_pos_1 += 3;
@@ -207,7 +224,7 @@ function excel(){
 				$column_pos_1 = 0;
 				$column_pos_2 = 1;
 				$column_pos_3 = 2;
-				$sheet_2_line_2 += 20;
+				$sheet_2_line_2 += 22;
 				$count = 0;
 			}
 

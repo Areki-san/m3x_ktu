@@ -132,7 +132,7 @@ try {
             break;
 
         // ── КТУ по работам ───────────────────────────────────
-        case 'ktu':
+        case 'setktu':
             $stmt = $db->prepare('UPDATE OR IGNORE ktu SET work_ktu = :work_ktu WHERE work_id = :work_id');
             if ($stmt === false) {
                 throw new RuntimeException('Не удалось подготовить запрос: ' . $db->lastErrorMsg());
@@ -141,8 +141,8 @@ try {
             $db->exec('BEGIN TRANSACTION');
 
             foreach ($_POST as $workId => $ktu) {
-                $stmt->bindValue(':work_id',  (int) $workId, SQLITE3_INTEGER);
-                $stmt->bindValue(':work_ktu', (int) $ktu,    SQLITE3_INTEGER);
+                $stmt->bindValue(':work_id',  (string) $workId, SQLITE3_TEXT);
+                $stmt->bindValue(':work_ktu', (float) $ktu,  SQLITE3_FLOAT);
                 $stmt->execute();
                 $stmt->reset();
             }
@@ -162,7 +162,7 @@ try {
 
             foreach ($_POST as $tip => $stavka) {
                 $stmt->bindValue(':tip',    (string) $tip,   SQLITE3_TEXT);
-                $stmt->bindValue(':stavka', (int) $stavka,   SQLITE3_INTEGER);
+                $stmt->bindValue(':stavka', (float) $stavka, SQLITE3_FLOAT);
                 $stmt->execute();
                 $stmt->reset();
             }

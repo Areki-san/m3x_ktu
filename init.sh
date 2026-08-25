@@ -33,7 +33,7 @@ cat > "$CONF_FILE" << EOF
 	}
     
     define("edit_delta", 9);
-    define("site_ver", "ver_20260820");
+    define("site_ver", "ver_20260826");
 
     define("URL", "$USER_URL");
     define("api_key", "$USER_API_KEY");

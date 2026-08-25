@@ -15,3 +15,6 @@ legend {
     display: inline-block;
 }
 
+.table-caption-top caption {
+  caption-side: top;
+}

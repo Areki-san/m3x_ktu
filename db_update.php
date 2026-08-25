@@ -64,6 +64,12 @@ $schemas = [
         city            TEXT NOT NULL
     )",
 
+    "CREATE TABLE IF NOT EXISTS ktu (
+        work_id	        TEXT,
+        type_of_work	TEXT NOT NULL UNIQUE,
+        work_ktu	    REAL NOT NULL DEFAULT 0,
+    )",
+
     "CREATE TABLE IF NOT EXISTS fond_ktu (
         otdel   TEXT NOT NULL UNIQUE,
         ktu     INTEGER NOT NULL DEFAULT 0

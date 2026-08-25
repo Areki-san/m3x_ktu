@@ -45,16 +45,16 @@
 {foreach $resPeople as $row}
 		<tr class=text-center>
 			<td class='align-middle'>{$row.fio}</td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[oklad]' value={$row.oklad}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[stavka_chas]' value={$row.stavka_chas}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[stavka]' value={$row.stavka}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[nadbavka]' value={$row.nadbavka}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[premia]' value={$row.premia}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[uderjanie]' value={$row.uderjanie}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[avans]' value={$row.avans}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[bolnichnye]' value={$row.bolnichnye}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[otpusknye]' value={$row.otpusknye}></td>
-			<td><input type=number class='form-control text-center' name='{$row.id}[dolg]' value={$row.dolg}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[oklad]' value={$row.oklad}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[stavka_chas]' value={$row.stavka_chas}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[stavka]' value={$row.stavka}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[nadbavka]' value={$row.nadbavka}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[premia]' value={$row.premia}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[uderjanie]' value={$row.uderjanie}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[avans]' value={$row.avans}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[bolnichnye]' value={$row.bolnichnye}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[otpusknye]' value={$row.otpusknye}></td>
+			<td><input type=number step="0.1" class='form-control text-center' name='{$row.id}[dolg]' value={$row.dolg}></td>
 		</tr>
 {/foreach}
 

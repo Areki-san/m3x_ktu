@@ -107,7 +107,7 @@ require_once 'conf.php';
      * employee_id - id сотрудника, который просматривает это задание (для фиксации в историю по заданию)
      * is_without_comments - флаг - не выводить комментарии в информации по заданию
      */
-    task_show = [
+    $task_show = [
         "key" => api_key,
 		"cat" => "task",
 		"action" => "show",

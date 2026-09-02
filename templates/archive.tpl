@@ -31,8 +31,6 @@
 
         <li class="nav-item">
             <input type="button" id="btnArchiveShow" class="btn btn-primary me-2" value="Показать из архива" />
-        </li>
-        <li class="nav-item">
             <input type="button" id="btnDownloadExcel" class="btn btn-primary me-2" value="EXCEL" />
         </li>
     </form>
